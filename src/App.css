@@ -40,6 +40,31 @@ body::before {
   pointer-events: none;
 }
 
+/* ── CUSTOM SCROLLBARS ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(5, 30, 20, 0.6);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) rgba(5, 30, 20, 0.6);
+}
+
 header, main { position: relative; z-index: 1; }
 
 /* ── HEADER ─────────────────────────────────────────────────────────────────── */
@@ -112,6 +137,46 @@ header, main { position: relative; z-index: 1; }
 @keyframes glow-pulse {
   0%, 100% { box-shadow: 0 0 0   0 rgba(242,201,76,0); }
   50%       { box-shadow: 0 0 18px 4px rgba(242,201,76,0.4); }
+}
+
+/* ── TIMER SWITCHER ──────────────────────────────────────────────────────────── */
+.timer-switch-wrapper {
+  display:     flex;
+  align-items: center;
+  gap:         12px;
+}
+
+.timer-switcher {
+  display:     flex;
+  background:  var(--bg-card);
+  border:      1.5px solid var(--border);
+  border-radius: 50px;
+  padding:     4px;
+  backdrop-filter: blur(8px);
+}
+
+.timer-switch-btn {
+  background:    transparent;
+  border:        1px solid transparent;
+  color:         var(--text-muted);
+  font-size:     0.85rem;
+  font-weight:   500;
+  padding:       6px 14px;
+  border-radius: 30px;
+  cursor:        pointer;
+  transition:    all 0.2s;
+  font-family:   var(--font-body);
+}
+
+.timer-switch-btn:hover {
+  color: var(--gold);
+}
+
+.timer-switch-btn.active {
+  background:   var(--gold-glow);
+  color:        var(--gold);
+  font-weight:  600;
+  border-color: rgba(242, 201, 76, 0.3);
 }
 
 /* ── PROFILE BADGE ───────────────────────────────────────────────────────────── */
