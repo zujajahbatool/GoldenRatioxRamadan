@@ -116,12 +116,14 @@ export default function App() {
   // { recipeId: scaledServings }
   const [scaleMap, setScaleMap] = useState({})
 
-  //Iftar countdown
+  //Iftar & Suhoor countdown
   const [city, setCity]               = useState('Faisalabad')
   const [country, setCountry]         = useState('PK')
   const [maghrib, setMaghrib]         = useState(null)  // "HH:MM"
+  const [fajr, setFajr]               = useState(null)  // "HH:MM"
+  const [timerType, setTimerType]     = useState('iftar') // 'iftar' or 'suhoor'
   const [countdown, setCountdown]     = useState('Loading…')
-  const [iftarPassed, setIftarPassed] = useState(false)
+  const [timerPassed, setTimerPassed] = useState(false)
   const [refreshIdx, setRefreshIdx]   = useState(0)
 
   //TTS
@@ -158,16 +160,16 @@ export default function App() {
       })
       .then(data => {
         if (controller.signal.aborted) return
-        const raw = data?.data?.timings?.Maghrib   // e.g. "18:30" or "18:30 (PKT)"
-        if (raw) {
-          const time = raw.split(' ')[0]           // strip timezone suffix
-          setMaghrib(time)
+        const timings = data?.data?.timings
+        if (timings) {
+          if (timings.Maghrib) setMaghrib(timings.Maghrib.split(' ')[0])
+          if (timings.Fajr) setFajr(timings.Fajr.split(' ')[0])
         }
       })
       .catch(e => {
         if (controller.signal.aborted) return
-        console.error('Failed to fetch Iftar time:', e)
-        setCountdown('🌙 Iftar Soon')
+        console.error('Failed to fetch prayer times:', e)
+        setCountdown('🌙 Times Soon')
       })
 
     return () => controller.abort()
@@ -175,19 +177,20 @@ export default function App() {
 
   //Countdown tick
   useEffect(() => {
-    if (!maghrib) return
+    const timeStr = timerType === 'iftar' ? maghrib : fajr
+    if (!timeStr) return
     const tick = () => {
       const now = new Date()
-      const [h, m] = maghrib.split(':').map(Number)
+      const [h, m] = timeStr.split(':').map(Number)
       const target = new Date()
       target.setHours(h, m, 0, 0)
       
-      const diffSinceIftar = now - target
-      // If Iftar time passed today, show "Iftar Time!" for 1 hour, otherwise target tomorrow's Iftar
-      if (diffSinceIftar >= 0) {
-        if (diffSinceIftar < 3600000) {
-          setIftarPassed(true)
-          setCountdown('Iftar Time! 🌙')
+      const diffSinceTime = now - target
+      // If time passed today, show "Time!" for 1 hour, otherwise target tomorrow's time
+      if (diffSinceTime >= 0) {
+        if (diffSinceTime < 3600000) {
+          setTimerPassed(true)
+          setCountdown(timerType === 'iftar' ? 'Iftar Time! 🌙' : 'Suhoor Ended 🌅')
           return
         } else {
           target.setDate(target.getDate() + 1)
@@ -195,7 +198,7 @@ export default function App() {
       }
       
       const diff = target - now
-      setIftarPassed(false)
+      setTimerPassed(false)
       setCountdown(formatCountdown(diff))
     }
     tick()
@@ -211,7 +214,7 @@ export default function App() {
       clearInterval(id)
       clearTimeout(midId)
     }
-  }, [maghrib])
+  }, [maghrib, fajr, timerType])
 
   //RECIPE CRUD
   async function loadRecipes(uid, guest) {
@@ -253,23 +256,28 @@ export default function App() {
 
     if (isGuest || !user) {
       setRecipes(prev => [recipe, ...prev])
+      setSaving(false)
+      closeAdd()
     } else {
+      // Optimistically add to UI first for instant feedback
+      setRecipes(prev => [recipe, ...prev])
+      setSaving(false)
+      closeAdd()
+      
       try {
         const ref = await addDoc(
           collection(db, 'users', user.uid, 'recipes'),
           { ...recipe, createdAt: timestamp }
         )
-        recipe.id = ref.id
-        setRecipes(prev => [recipe, ...prev])
+        // Update the temporary ID to the real Firebase document ID silently
+        setRecipes(prev => prev.map(r => r.id === localId ? { ...r, id: ref.id } : r))
       } catch (e) {
         console.error('Failed to save recipe:', e)
-        alert('Could not save. Try again.')
-        setSaving(false)
-        return
+        // Rollback the optimistic update on network failure
+        setRecipes(prev => prev.filter(r => r.id !== localId))
+        alert('Could not sync recipe to the vault. Check your connection.')
       }
     }
-    setSaving(false)
-    closeAdd()
   }
 
   async function deleteRecipe(id) {
@@ -532,9 +540,22 @@ export default function App() {
         </div>
 
         <div className="header-right">
-          {/* DAY 7 — Live iftar countdown */}
-          <div className={`iftar-pill ${iftarPassed ? 'iftar-now' : ''}`}>
-            🕌 {iftarPassed ? countdown : `Iftar in ${countdown}`}
+          {/* Live iftar/suhoor countdown */}
+          <div className="timer-switch-wrapper">
+            <div className="timer-switcher">
+              <button 
+                className={`timer-switch-btn ${timerType === 'suhoor' ? 'active' : ''}`}
+                onClick={() => setTimerType('suhoor')}
+              >🌅 Suhoor</button>
+              <button 
+                className={`timer-switch-btn ${timerType === 'iftar' ? 'active' : ''}`}
+                onClick={() => setTimerType('iftar')}
+              >🌙 Iftar</button>
+            </div>
+            <div className={`iftar-pill ${timerPassed ? 'iftar-now' : ''}`}>
+              {timerType === 'iftar' ? '🕌 ' : '🕰 '}
+              {timerPassed ? countdown : `${timerType === 'iftar' ? 'Iftar' : 'Suhoor'} in ${countdown}`}
+            </div>
           </div>
 
           {isGuest && (
