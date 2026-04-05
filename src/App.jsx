@@ -1,5 +1,5 @@
 //GoldenRatioxRamadan—App.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   auth, db,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -131,6 +131,7 @@ export default function App() {
 
   //Voice input
   const [micActive, setMicActive] = useState(null)
+  const recRef = useRef(null)  
 
   //AUTH LISTENER
   useEffect(() => {
@@ -144,6 +145,14 @@ export default function App() {
         } catch (e) {
           console.error('Failed to load recipes on auth:', e)
         }
+      }
+      else {
+        setUser(null)
+        setIsGuest(false)
+        setShowAuth(true)
+        setRecipes([])
+        setScaleMap({})
+        setLoading(false)
       }
     })
     return unsub
@@ -179,6 +188,7 @@ export default function App() {
   useEffect(() => {
     const timeStr = timerType === 'iftar' ? maghrib : fajr
     if (!timeStr) return
+    
     const tick = () => {
       const now = new Date()
       const [h, m] = timeStr.split(':').map(Number)
@@ -201,9 +211,11 @@ export default function App() {
       setTimerPassed(false)
       setCountdown(formatCountdown(diff))
     }
+    
     tick()
     const id = setInterval(tick, 1000)
 
+    //Refresh prayer time data at midnight
     const now = new Date()
     const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0) - now + 1000
     const midId = setTimeout(() => {
@@ -417,6 +429,7 @@ export default function App() {
     rec.onend = () => setMicActive(null)
     rec.onerror = (e) => {
       console.error('Speech recognition error:', e.error)
+      recRef.current = null
       setMicActive(null)
       alert('Voice input failed. Please try again.')
     }
@@ -454,6 +467,8 @@ export default function App() {
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = `${recipe.name.replace(/\s+/g, '_')}_recipe.txt`
+    // FIX: Must append to DOM before clicking, especially in Firefox
+    document.body.appendChild(a)
     a.click()
     URL.revokeObjectURL(a.href)
   }
@@ -472,12 +487,18 @@ export default function App() {
             <div className="auth-logo">🌙 GoldenRatio<span>×</span>Ramadan</div>
             <div className="auth-divider">✦ ── ── ── ✦</div>
 
-            <div className="auth-tabs">
+            <div className="auth-tabs" role="tablist">
               <button
+                type="button"
+                role="tab"
+                aria-selected={authTab === 'login'}
                 className={`auth-tab ${authTab === 'login' ? 'active' : ''}`}
                 onClick={() => { setAuthTab('login'); setLoginErr(''); setSignupErr('') }}
               >Login</button>
               <button
+                type="button"
+                role="tab"
+                aria-selected={authTab === 'signup'}
                 className={`auth-tab ${authTab === 'signup' ? 'active' : ''}`}
                 onClick={() => { setAuthTab('signup'); setLoginErr(''); setSignupErr('') }}
               >Sign Up</button>
@@ -565,7 +586,8 @@ export default function App() {
                 <div className="profile-name">Guest</div>
                 <div className="profile-email">Browsing as guest</div>
               </div>
-              <button
+              <button 
+                type="button"
                 className="btn-login-from-guest"
                 onClick={() => { setIsGuest(false); setShowAuth(true) }}
               >Login / Sign Up</button>
@@ -593,6 +615,9 @@ export default function App() {
             {[['all', '✦ All'], ['suhoor', CAT.suhoor], ['iftar', CAT.iftar], ['dessert', CAT.dessert]].map(([cat, label]) => (
               <button
                 key={cat}
+                type="button"
+                role="tab"
+                aria-selected={activeCat === cat}
                 className={`tab ${activeCat === cat ? 'active' : ''}`}
                 onClick={() => setActiveCat(cat)}
               >{label}</button>
@@ -635,6 +660,7 @@ export default function App() {
                     <span className="scaler-label">👤 Servings</span>
                     <div className="scaler-ctrl">
                       <button
+                        type="button"
                         className="scaler-btn"
                         onClick={() => adjustScale(recipe.id, -1, recipe.servings)}
                         disabled={scaled <= 1}
@@ -642,15 +668,18 @@ export default function App() {
                       >−</button>
                       <span className="scaler-val">{scaled}</span>
                       <button
+                        type="button"
                         className="scaler-btn"
                         onClick={() => adjustScale(recipe.id, +1, recipe.servings)}
                         aria-label="Increase servings"
                       >＋</button>
                       {isScaled && (
                         <button
+                          type="button"
                           className="scaler-reset"
                           onClick={() => resetScale(recipe.id)}
                           title={`Reset to ${recipe.servings}`}
+                          aria-label={`Reset servings to ${recipe.servings}`}
                         >↺</button>
                       )}
                     </div>
@@ -672,7 +701,10 @@ export default function App() {
                     )}
                     {(mode === 'both' || mode === 'listen') && (
                       <button
+                        type="button"
                         className={`btn-play ${isPlaying ? 'is-playing' : ''}`}
+                        aria-label={isPlaying ? `Stop playing ${recipe.name}` : `Listen to ${recipe.name}`}
+                        aria-pressed={isPlaying}
                         onClick={() => playRecipe(recipe.id)}
                       >{isPlaying ? '⏹ Stop' : '▶ Listen'}</button>
                     )}
@@ -689,6 +721,9 @@ export default function App() {
       {showAdd && (
         <div
           className="modal-overlay open"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-modal-title"
           onClick={e => { if (e.target.classList.contains('modal-overlay')) closeAdd() }}
         >
           <div className="modal">
@@ -709,6 +744,7 @@ export default function App() {
                     placeholder="e.g. Chicken Biryani"
                   />
                   <button
+                    type="button"
                     className={`btn-mic ${micActive === 'name' ? 'mic-on' : ''}`}
                     onClick={() => startVoice('name')}
                     title="Voice input"
@@ -720,6 +756,7 @@ export default function App() {
               <div className="form-group">
                 <label className="form-label">Category</label>
                 <select
+                  id="recipe-category"
                   className="form-input"
                   value={form.category}
                   onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
@@ -747,7 +784,9 @@ export default function App() {
                 <div className="mode-selector">
                   {[['both', '📖🔊 Read & Listen'], ['read', '📖 Read Only'], ['listen', '🔊 Listen Only']].map(([m, l]) => (
                     <button
+                      type="button"
                       key={m}
+                      aria-pressed={form.mode === m}
                       className={`mode-btn ${form.mode === m ? 'active' : ''}`}
                       onClick={() => setForm(p => ({ ...p, mode: m }))}
                     >{l}</button>
@@ -766,23 +805,28 @@ export default function App() {
                         type="text" value={ing.item}
                         onChange={e => updateIng(ing.id, 'item', e.target.value)}
                         placeholder="Ingredient"
+                        aria-label={`Ingredient ${idx + 1} name`}
                       />
                       <input
                         className="form-input"
                         type="number" value={ing.amount}
                         onChange={e => updateIng(ing.id, 'amount', e.target.value)}
                         placeholder="Qty" min="0" step="0.1"
+                        aria-label={`Ingredient ${idx + 1} quantity`}
                       />
                       <input
                         className="form-input"
                         type="text" value={ing.unit}
                         onChange={e => updateIng(ing.id, 'unit', e.target.value)}
+                        aria-label={`Ingredient ${idx + 1} unit`}
                         placeholder="Unit"
                       />
                       <button
+                        type="button"
                         className="btn-remove-ing"
                         onClick={() => removeIngRow(ing.id)}
                         disabled={ings.length === 1}
+                        aria-label={`Remove ingredient ${idx + 1}`}
                       >✕</button>
                     </div>
                   ))}
@@ -795,12 +839,14 @@ export default function App() {
                 <label className="form-label">Cooking Steps</label>
                 <div className="input-mic-row">
                   <textarea
+                    id="recipe-steps"
                     className="form-input form-textarea"
                     value={form.steps}
                     onChange={e => setForm(p => ({ ...p, steps: e.target.value }))}
                     placeholder="Step 1: Wash rice…&#10;Step 2: Fry onions…"
                   />
                   <button
+                    type="button"
                     className={`btn-mic ${micActive === 'steps' ? 'mic-on' : ''}`}
                     onClick={() => startVoice('steps')}
                     title="Voice input"
@@ -823,12 +869,20 @@ export default function App() {
       {readRecipe && (
         <div
           className="modal-overlay open"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="read-modal-title"
           onClick={e => { if (e.target.classList.contains('modal-overlay')) setReadId(null) }}
         >
           <div className="modal read-modal">
             <div className="modal-header">
               <h2 className="modal-title">📖 {readRecipe.name}</h2>
-              <button className="modal-close" onClick={() => setReadId(null)}>✕</button>
+              <button 
+                type="button"
+                className="modal-close" 
+                onClick={() => setReadId(null)}
+                aria-label="Close recipe reader">✕
+              </button>
             </div>
             <div className="modal-body">
 
@@ -840,19 +894,25 @@ export default function App() {
                 <div className="scaler-ctrl">
                   <span className="scaler-label-sm">Servings:</span>
                   <button
+                    type="button"
                     className="scaler-btn"
                     onClick={() => adjustScale(readRecipe.id, -1, readRecipe.servings)}
                     disabled={getScaled(readRecipe) <= 1}
+                    aria-label="Decrease servings"
                   >−</button>
                   <span className="scaler-val">{getScaled(readRecipe)}</span>
                   <button
+                    type="button"
                     className="scaler-btn"
                     onClick={() => adjustScale(readRecipe.id, +1, readRecipe.servings)}
+                    aria-label="Increase servings"
                   >＋</button>
                   {getScaled(readRecipe) !== readRecipe.servings && (
                     <button
+                      type="button"
                       className="scaler-reset"
                       onClick={() => resetScale(readRecipe.id)}
+                      aria-label={`Reset servings to ${readRecipe.servings}`}
                     >↺ Reset</button>
                   )}
                 </div>
