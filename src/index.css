@@ -52,6 +52,13 @@
 
 body {
   margin: 0;
+  overflow-x: hidden;
+}
+
+@media (max-width: 480px) {
+  #root {
+    border-inline: none;
+  }
 }
 
 #root {
