@@ -612,7 +612,7 @@ export default function App() {
 
         <div className="header-right">
           {/* Live iftar/suhoor countdown */}
-          <div className="timer-switch-wrapper">
+          <div className="timer-left">
             <div className="timer-switcher">
               <button 
                 className={`timer-switch-btn ${timerType === 'suhoor' ? 'active' : ''}`}
@@ -623,10 +623,6 @@ export default function App() {
                 onClick={() => setTimerType('iftar')}
               >🌙 Iftar</button>
             </div>
-            <div className={`iftar-pill ${timerPassed ? 'iftar-now' : ''}`}>
-              {timerType === 'iftar' ? '🕌 ' : '🕰 '}
-              {timerPassed ? countdown : `${timerType === 'iftar' ? 'Iftar' : 'Suhoor'} in ${countdown}`}
-            </div>
             <div className="city-row">
               {editingCity ? (
                 <div className="city-edit-row">
@@ -634,7 +630,7 @@ export default function App() {
                    className="city-input"
                    type="text"
                    value={cityDraft}
-                   onChange={e => setCityDraft(e.target.value.replace(/[^a-zA-Z\s\-]/g, '').          slice(0, 60))}
+                   onChange={e => setCityDraft(e.target.value.replace(/[^a-zA-Z\s\-]/g, '').slice(0, 60))}
                    placeholder="City"
                    onKeyDown={e => {
                      if (e.key === 'Enter') {
@@ -674,31 +670,38 @@ export default function App() {
             </div>
           </div>
 
-          {isGuest && (
-            <div className="profile-badge guest-badge">
-              <div className="profile-avatar guest-avatar">👤</div>
-              <div className="profile-info">
-                <div className="profile-name">Guest</div>
-                <div className="profile-email">Browsing as guest</div>
-              </div>
-              <button 
-                type="button"
-                className="btn-login-from-guest"
-                onClick={() => { setIsGuest(false); setShowAuth(true) }}
-              >Login / Sign Up</button>
+          <div className="timer-right">
+            <div className={`iftar-pill ${timerPassed ? 'iftar-now' : ''}`}>
+              {timerType === 'iftar' ? '🕌 ' : '🕰 '}
+              {timerPassed ? countdown : `${timerType === 'iftar' ? 'Iftar' : 'Suhoor'} in ${countdown}`}
             </div>
-          )}
 
-          {user && (
-            <div className="profile-badge">
-              <div className="profile-avatar">{(user.displayName || 'C')[0].toUpperCase()}</div>
-              <div className="profile-info">
-                <div className="profile-name">{user.displayName || 'Chef'}</div>
-                <div className="profile-email">{user.email}</div>
+            {isGuest && (
+              <div className="profile-badge guest-badge">
+                <div className="profile-avatar guest-avatar">👤</div>
+                <div className="profile-info">
+                  <div className="profile-name">Guest</div>
+                  <div className="profile-email">Browsing as guest</div>
+                </div>
+                <button 
+                  type="button"
+                  className="btn-login-from-guest"
+                  onClick={() => { setIsGuest(false); setShowAuth(true) }}
+                >Login / Sign Up</button>
               </div>
-              <button className="btn-logout" onClick={handleLogout}>Logout</button>
-            </div>
-          )}
+            )}
+
+            {user && (
+              <div className="profile-badge">
+                <div className="profile-avatar">{(user.displayName || 'C')[0].toUpperCase()}</div>
+                <div className="profile-info">
+                  <div className="profile-name">{user.displayName || 'Chef'}</div>
+                  <div className="profile-email">{user.email}</div>
+                </div>
+                <button className="btn-logout" onClick={handleLogout}>Logout</button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -874,7 +877,7 @@ export default function App() {
                 />
               </div>
 
-              //MODE
+              {/*MODE*/}
               <div className="form-group">
                 <label className="form-label" htmlFor="recipe-mode">Recipe Mode</label>
                 <select
@@ -889,7 +892,7 @@ export default function App() {
                 </select>
               </div>
 
-              //INGREDIENTS
+              {/*INGREDIENTS*/}
               <div className="form-group">
                 <label className="form-label">Ingredients</label>
                 <div className="ingredients-list">

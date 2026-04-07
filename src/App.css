@@ -214,12 +214,24 @@ header, main { position: relative; z-index: 1; }
   gap:         12px;
 }
 
+.timer-left,
+.timer-right {
+  display:        flex;
+  flex-direction: column;
+  gap:            10px;
+  min-width:      0;
+}
+
+.timer-right {
+  align-items:    flex-end;
+}
+
 .timer-switcher {
   display:     flex;
   background:  var(--bg-card);
   border:      1.5px solid var(--border);
   border-radius: 50px;
-  padding:     4px;
+  padding:     2px;
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
@@ -981,23 +993,32 @@ select.form-input option {
     -webkit-overflow-scrolling: touch;
   }
   .header-left  { flex: 0 1 auto; min-width: 0; }
-  .header-right { flex: 1 1 auto; justify-content: flex-end; gap: 6px; }
+  .header-right {
+    display:            grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap:                10px;
+    width:              100%;
+    align-items:        start;
+    justify-items:      stretch;
+  }
+  .timer-left  { grid-column: 1 / 2; }
+  .timer-right { grid-column: 2 / 3; }
   .logo         { font-size: clamp(1.4rem, 2.5vw, 1.8rem); }
   .tagline      { font-size: 0.75rem; }
-  .iftar-pill   { font-size: 0.75rem; padding: 5px 10px; min-width: auto; flex-shrink: 0; }
-  .timer-switch-wrapper { flex-direction: column; width: 100%; gap: 8px; align-items: stretch; }
+  .iftar-pill   { font-size: 0.75rem; padding: 5px 10px; min-width: auto; flex-shrink: 0; justify-self: end; }
   .timer-switcher       { width: 100%; }
-  .profile-badge        { width: 100%; flex-shrink: 0; }
+  .profile-badge        { width: auto; flex-shrink: 0; }
   .profile-email        { display: none; }
   .container    { padding: 1.2rem 0.8rem 3rem; }
   .recipe-grid  { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
   .ingredient-row { grid-template-columns: 2fr 1fr 1fr auto; gap: 6px; }
   .modal        { max-width: 90vw; max-height: 85vh; }
   .auth-card    { padding: 1.8rem 1.5rem; }
-  .btn-add-recipe { padding: 8px 18px; font-size: 0.88rem; }
+  .btn-add-recipe { padding: 8px 18px; font-size: 0.88rem; width: auto; align-self: flex-end; }
   .tabs-wrapper { gap: 10px; margin-bottom: 1.5rem; }
   .timer-block  { align-items: stretch; }
-  .city-row     { justify-content: center; }
+  .city-row     { justify-content: flex-start; }
 }
 
 /* Small devices ≤ 599px */
@@ -1009,7 +1030,15 @@ select.form-input option {
     gap:        0.5rem;
   }
   .header-left  { width: auto; flex: 0 1 auto; min-width: 0; }
-  .header-right { flex: 1 1 100%; gap: 4px; justify-content: space-between; }
+  .header-right {
+    display:            grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap:                4px;
+    width:              100%;
+    align-items:        start;
+    justify-items:      stretch;
+  }
   .logo         { font-size: 1.2rem; }
   .tagline      { font-size: 0.65rem; letter-spacing: 0.02em; }
   .iftar-pill   { font-size: 0.65rem; padding: 3px 6px; flex: 1 1 auto; min-width: 0; text-align: center; }
@@ -1026,7 +1055,7 @@ select.form-input option {
   .tabs-wrapper { flex-direction: column-reverse; margin-bottom: 1.2rem; gap: 8px; }
   .tabs         { gap: 4px; margin-bottom: 0; }
   .tab          { padding: 6px 10px; font-size: 0.75rem; }
-  .btn-add-recipe { padding: 8px 16px; font-size: 0.85rem; width: 100%; }
+  .btn-add-recipe { padding: 8px 16px; font-size: 0.85rem; width: auto; align-self: flex-end; }
   .recipe-grid  { grid-template-columns: 1fr; gap: 0.9rem; }
   .recipe-card  { padding: 1rem; gap: 0.6rem; }
   .recipe-card-name { font-size: 0.95rem; }
