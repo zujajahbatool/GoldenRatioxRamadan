@@ -55,6 +55,25 @@ const SAMPLE_RECIPES = [
   }
 ]
 
+//SECURITY CONSTANTS
+const MAX_NAME  = 120
+const MAX_ITEM  = 80
+const MAX_UNIT  = 20
+const MAX_STEPS = 5000
+const MAX_INGS  = 30
+
+function sanitize(val, max) {
+  return String(val ?? '').trim().slice(0, max)
+}
+function sanitizeNum(val) {
+  const n = parseFloat(val)
+  return isNaN(n) || n < 0 ? 0 : Math.min(n, 99999)
+}
+function sanitizeCity(val) {
+  // Allow letters, spaces, hyphens only
+  return String(val ?? '').replace(/[^a-zA-Z\s\-]/g, '').trim().slice(0, 60)
+}
+
 //HELPERS
 function scaleAmount(amount, baseServings, scaledServings) {
   if (!baseServings) return amount
@@ -125,6 +144,8 @@ export default function App() {
   const [countdown, setCountdown]     = useState('Loading…')
   const [timerPassed, setTimerPassed] = useState(false)
   const [refreshIdx, setRefreshIdx]   = useState(0)
+  const [editingCity, setEditingCity] = useState(false)
+  const [cityDraft, setCityDraft]     = useState('')
 
   //TTS
   const [speaking, setSpeaking] = useState(null)
@@ -183,6 +204,15 @@ export default function App() {
 
     return () => controller.abort()
   }, [city, country, refreshIdx])
+
+  // Stop mic when add modal closes
+  useEffect(() => {
+    if (!showAdd && recRef.current) {
+      try { recRef.current.stop() } catch(_) {}
+      recRef.current = null
+      setMicActive(null)
+    }
+  }, [showAdd])
 
   //Countdown tick
   useEffect(() => {
@@ -244,27 +274,37 @@ export default function App() {
   }
 
   async function saveRecipe() {
-    if (!form.name.trim()) { alert('Please enter a recipe name!'); return }
-    if (!form.servings || parseInt(form.servings) < 1) { alert('Please enter valid servings (1+)!'); return }
-    const validIngs = ings.filter(i => i.item.trim())
-    if (!validIngs.length) { alert('Add at least one ingredient!'); return }
+  const name = sanitize(form.name, MAX_NAME)
+  if (!name) { alert('Please enter a recipe name!'); return }
 
-    setSaving(true)
-    const timestamp = Date.now()
-    const localId = `${timestamp}-${Math.random().toString(36).slice(2)}`
-    const recipe = {
-      name: form.name.trim(),
-      category: form.category,
-      servings: parseInt(form.servings) || 4,
-      steps: form.steps.trim(),
-      mode: form.mode,
-      ingredients: validIngs.map(i => ({
-        item: i.item.trim(),
-        amount: parseFloat(i.amount) || 0,
-        unit: i.unit.trim()
-      })),
-      id: localId
-    }
+  const servings = parseInt(form.servings)
+  if (!servings || servings < 1 || servings > 9999) { alert('Please enter valid servings (1–9999)!'); return }
+
+  const validIngs = ings.filter(i => i.item.trim()).slice(0, MAX_INGS)
+  if (!validIngs.length) { alert('Add at least one ingredient!'); return }
+
+  const steps = sanitize(form.steps, MAX_STEPS)
+  const allowedCats = ['suhoor', 'iftar', 'dessert']
+  const allowedModes = ['both', 'read', 'listen']
+  const category = allowedCats.includes(form.category) ? form.category : 'suhoor'
+  const mode     = allowedModes.includes(form.mode)     ? form.mode     : 'both'
+
+  setSaving(true)
+  const timestamp = Date.now()
+  const localId = `${timestamp}-${Math.random().toString(36).slice(2)}`
+  const recipe = {
+    name,
+    category,
+    servings,
+    steps,
+    mode,
+    ingredients: validIngs.map(i => ({
+      item: sanitize(i.item, MAX_ITEM),
+      amount: sanitizeNum(i.amount),
+      unit: sanitize(i.unit, MAX_UNIT)
+    })),
+    id: localId
+  }
 
     if (isGuest || !user) {
       setRecipes(prev => [recipe, ...prev])
@@ -303,6 +343,7 @@ export default function App() {
         return  // Abort: don't update local state on failure
       }
     }
+    if (speaking === id) { window.speechSynthesis?.cancel(); setSpeaking(null) }
     setRecipes(prev => prev.filter(r => r.id !== id))
     setScaleMap(prev => { const n = { ...prev }; delete n[id]; return n })
     if (readId === id) setReadId(null)
@@ -369,7 +410,8 @@ export default function App() {
   }
   function closeAdd() { setShowAdd(false) }
 
-  function addIngRow() { setIngs(prev => [...prev, newIngRow()]) }
+  function addIngRow() {
+  setIngs(prev => prev.length >= MAX_INGS ? prev : [...prev, newIngRow()])}
   function removeIngRow(id) { setIngs(prev => prev.filter(i => i.id !== id)) }
   function updateIng(id, f, v) { setIngs(prev => prev.map(i => i.id === id ? { ...i, [f]: v } : i)) }
 
@@ -410,30 +452,37 @@ export default function App() {
   }
 
   function startVoice(field) {
-    if (micActive) return  // Already recording
+    if (micActive) {
+      // Toggle off — stop existing session
+      if (recRef.current) { try { recRef.current.stop() } catch(_) {} recRef.current = null }
+      setMicActive(null)
+      return
+    }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { alert('Voice input needs Chrome.'); return }
+    if (!SR) { alert('Voice input needs Chrome or Edge.'); return }
     const rec = new SR()
-    rec.lang = 'en-US'
-    rec.continuous = field === 'steps'
+    rec.lang        = 'en-US'
+    rec.continuous  = field === 'steps'
+    rec.maxAlternatives = 1
+    recRef.current  = rec
     setMicActive(field)
     rec.onresult = (e) => {
       const t = Array.from(e.results).map(r => r[0].transcript).join(' ')
-      if (t.trim()) {  // Only update if transcription is not empty
+      if (t.trim()) {
         setForm(prev => ({
-          ...prev,
-          [field]: (prev[field] ? prev[field] + ' ' : '') + t.trim()
+         ...prev,
+         [field]: (prev[field] ? prev[field] + ' ' : '') + sanitize(t, MAX_STEPS)
         }))
       }
     }
-    rec.onend = () => setMicActive(null)
+    rec.onend  = () => { recRef.current = null; setMicActive(null) }
     rec.onerror = (e) => {
       console.error('Speech recognition error:', e.error)
       recRef.current = null
       setMicActive(null)
-      alert('Voice input failed. Please try again.')
+      if (e.error !== 'aborted') alert('Voice input failed. Please try again.')
     }
-    rec.start()
+    try { rec.start() } catch(e) { recRef.current = null; setMicActive(null) }
   }
 
   //DOWNLOAD AS TEXT
@@ -470,6 +519,7 @@ export default function App() {
     // FIX: Must append to DOM before clicking, especially in Firefox
     document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
     URL.revokeObjectURL(a.href)
   }
 
@@ -576,6 +626,51 @@ export default function App() {
             <div className={`iftar-pill ${timerPassed ? 'iftar-now' : ''}`}>
               {timerType === 'iftar' ? '🕌 ' : '🕰 '}
               {timerPassed ? countdown : `${timerType === 'iftar' ? 'Iftar' : 'Suhoor'} in ${countdown}`}
+            </div>
+            <div className="city-row">
+              {editingCity ? (
+                <div className="city-edit-row">
+                 <input
+                   className="city-input"
+                   type="text"
+                   value={cityDraft}
+                   onChange={e => setCityDraft(e.target.value.replace(/[^a-zA-Z\s\-]/g, '').          slice(0, 60))}
+                   placeholder="City"
+                   onKeyDown={e => {
+                     if (e.key === 'Enter') {
+                        const safe = cityDraft.trim()
+                        if (safe) setCity(safe)
+                        setEditingCity(false)
+                      }
+                      if (e.key === 'Escape') setEditingCity(false)
+                    }}
+                    autoFocus
+                  />
+                 <button
+                   type="button"
+                   className="city-apply-btn"
+                   onClick={() => {
+                     const safe = cityDraft.trim()
+                     if (safe) setCity(safe)
+                     setEditingCity(false)
+                   }}
+                 >✓</button>
+                 <button
+                    type="button"
+                    className="city-cancel-btn"
+                    onClick={() => setEditingCity(false)}
+                  >✕</button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="city-pill"
+                  onClick={() => { setCityDraft(city); setEditingCity(true) }}
+                  title="Change city for prayer times"
+               >
+                 📍 {city}
+               </button>
+              )}
             </div>
           </div>
 
@@ -740,8 +835,9 @@ export default function App() {
                   <input
                     className="form-input" type="text"
                     value={form.name}
-                    onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                    onChange={e => setForm(p => ({ ...p, name: e.target.value.slice(0, MAX_NAME) }))}
                     placeholder="e.g. Chicken Biryani"
+                    maxLength={MAX_NAME}
                   />
                   <button
                     type="button"
@@ -778,48 +874,49 @@ export default function App() {
                 />
               </div>
 
-              {/*Mode*/}
+              //MODE
               <div className="form-group">
-                <label className="form-label">Recipe Mode</label>
-                <div className="mode-selector">
-                  {[['both', '📖🔊 Read & Listen'], ['read', '📖 Read Only'], ['listen', '🔊 Listen Only']].map(([m, l]) => (
-                    <button
-                      type="button"
-                      key={m}
-                      aria-pressed={form.mode === m}
-                      className={`mode-btn ${form.mode === m ? 'active' : ''}`}
-                      onClick={() => setForm(p => ({ ...p, mode: m }))}
-                    >{l}</button>
-                  ))}
-                </div>
+                <label className="form-label" htmlFor="recipe-mode">Recipe Mode</label>
+                <select
+                  id="recipe-mode"
+                  className="form-input"
+                  value={form.mode}
+                  onChange={e => setForm(p => ({ ...p, mode: e.target.value }))}
+                >
+                  <option value="both">📖🔊 Read &amp; Listen</option>
+                  <option value="read">📖 Read Only</option>
+                  <option value="listen">🔊 Listen Only</option>
+                </select>
               </div>
 
-              {/*Ingredients*/}
+              //INGREDIENTS
               <div className="form-group">
                 <label className="form-label">Ingredients</label>
                 <div className="ingredients-list">
-                  {ings.map(ing => (
+                  {ings.map((ing, idx) => (
                     <div className="ingredient-row" key={ing.id}>
                       <input
                         className="form-input"
                         type="text" value={ing.item}
-                        onChange={e => updateIng(ing.id, 'item', e.target.value)}
+                        onChange={e => updateIng(ing.id, 'item', e.target.value.slice(0, MAX_ITEM))}
                         placeholder="Ingredient"
+                        maxLength={MAX_ITEM}
                         aria-label={`Ingredient ${idx + 1} name`}
                       />
                       <input
                         className="form-input"
                         type="number" value={ing.amount}
                         onChange={e => updateIng(ing.id, 'amount', e.target.value)}
-                        placeholder="Qty" min="0" step="0.1"
+                        placeholder="Qty" min="0" max="99999" step="0.1"
                         aria-label={`Ingredient ${idx + 1} quantity`}
                       />
                       <input
                         className="form-input"
                         type="text" value={ing.unit}
-                        onChange={e => updateIng(ing.id, 'unit', e.target.value)}
-                        aria-label={`Ingredient ${idx + 1} unit`}
+                        onChange={e => updateIng(ing.id, 'unit', e.target.value.slice(0, MAX_UNIT))}
                         placeholder="Unit"
+                        maxLength={MAX_UNIT}
+                        aria-label={`Ingredient ${idx + 1} unit`}
                       />
                       <button
                         type="button"
@@ -839,11 +936,12 @@ export default function App() {
                 <label className="form-label">Cooking Steps</label>
                 <div className="input-mic-row">
                   <textarea
-                    id="recipe-steps"
-                    className="form-input form-textarea"
-                    value={form.steps}
-                    onChange={e => setForm(p => ({ ...p, steps: e.target.value }))}
+                   id="recipe-steps"
+                   className="form-input form-textarea"
+                   value={form.steps}
+                   onChange={e => setForm(p => ({ ...p, steps: e.target.value.slice(0,                  MAX_STEPS) }))}
                     placeholder="Step 1: Wash rice…&#10;Step 2: Fry onions…"
+                    maxLength={MAX_STEPS}
                   />
                   <button
                     type="button"

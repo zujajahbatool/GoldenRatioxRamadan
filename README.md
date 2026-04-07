@@ -119,7 +119,6 @@ golden-ratio-ramadan/
 ```bash
 # Clone the repository
 git clone https://github.com/zujajahbatool/GoldenRatioxRamadan.git
-cd GoldenRatioxRamadan/golden-ratio-ramadan
 
 # Install dependencies
 npm install
