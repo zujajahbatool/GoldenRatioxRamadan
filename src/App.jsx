@@ -274,61 +274,67 @@ export default function App() {
   }
 
   async function saveRecipe() {
-  const name = sanitize(form.name, MAX_NAME)
-  if (!name) { alert('Please enter a recipe name!'); return }
+    try {
+      const name = sanitize(form.name, MAX_NAME)
+      if (!name) { alert('Please enter a recipe name!'); return }
 
-  const servings = parseInt(form.servings)
-  if (!servings || servings < 1 || servings > 9999) { alert('Please enter valid servings (1–9999)!'); return }
+      const servings = parseInt(form.servings)
+      if (!servings || servings < 1 || servings > 9999) { alert('Please enter valid servings (1–9999)!'); return }
 
-  const validIngs = ings.filter(i => i.item.trim()).slice(0, MAX_INGS)
-  if (!validIngs.length) { alert('Add at least one ingredient!'); return }
+      const validIngs = ings.filter(i => i.item.trim()).slice(0, MAX_INGS)
+      if (!validIngs.length) { alert('Add at least one ingredient!'); return }
 
-  const steps = sanitize(form.steps, MAX_STEPS)
-  const allowedCats = ['suhoor', 'iftar', 'dessert']
-  const allowedModes = ['both', 'read', 'listen']
-  const category = allowedCats.includes(form.category) ? form.category : 'suhoor'
-  const mode     = allowedModes.includes(form.mode)     ? form.mode     : 'both'
+      setSaving(true)
 
-  setSaving(true)
-  const timestamp = Date.now()
-  const localId = `${timestamp}-${Math.random().toString(36).slice(2)}`
-  const recipe = {
-    name,
-    category,
-    servings,
-    steps,
-    mode,
-    ingredients: validIngs.map(i => ({
-      item: sanitize(i.item, MAX_ITEM),
-      amount: sanitizeNum(i.amount),
-      unit: sanitize(i.unit, MAX_UNIT)
-    })),
-    id: localId
-  }
+      const steps = sanitize(form.steps, MAX_STEPS)
+      const allowedCats = ['suhoor', 'iftar', 'dessert']
+      const allowedModes = ['both', 'read', 'listen']
+      const category = allowedCats.includes(form.category) ? form.category : 'suhoor'
+      const mode     = allowedModes.includes(form.mode)     ? form.mode     : 'both'
 
-    if (isGuest || !user) {
-      setRecipes(prev => [recipe, ...prev])
-      setSaving(false)
-      closeAdd()
-    } else {
-      // Optimistically add to UI first for instant feedback
-      setRecipes(prev => [recipe, ...prev])
-      setSaving(false)
-      closeAdd()
-      
-      try {
-        const ref = await addDoc(
-          collection(db, 'users', user.uid, 'recipes'),
-          { ...recipe, createdAt: timestamp }
-        )
-        // Update the temporary ID to the real Firebase document ID silently
-        setRecipes(prev => prev.map(r => r.id === localId ? { ...r, id: ref.id } : r))
-      } catch (e) {
-        console.error('Failed to save recipe:', e)
-        // Rollback the optimistic update on network failure
-        setRecipes(prev => prev.filter(r => r.id !== localId))
-        alert('Could not sync recipe to the vault. Check your connection.')
+      const timestamp = Date.now()
+      const localId = `${timestamp}-${Math.random().toString(36).slice(2)}`
+      const recipe = {
+        name,
+        category,
+        servings,
+        steps,
+        mode,
+        ingredients: validIngs.map(i => ({
+          item: sanitize(i.item, MAX_ITEM),
+          amount: sanitizeNum(i.amount),
+          unit: sanitize(i.unit, MAX_UNIT)
+        })),
+        id: localId
       }
+
+      if (isGuest || !user) {
+        setRecipes(prev => [recipe, ...prev])
+        closeAdd()
+      } else {
+        // Optimistically add to UI first for instant feedback
+        setRecipes(prev => [recipe, ...prev])
+        closeAdd()
+        
+        try {
+          const ref = await addDoc(
+            collection(db, 'users', user.uid, 'recipes'),
+            { ...recipe, createdAt: timestamp }
+          )
+          // Update the temporary ID to the real Firebase document ID silently
+          setRecipes(prev => prev.map(r => r.id === localId ? { ...r, id: ref.id } : r))
+        } catch (e) {
+          console.error('Failed to save recipe:', e)
+          // Rollback the optimistic update on network failure
+          setRecipes(prev => prev.filter(r => r.id !== localId))
+          alert('Could not sync recipe to the vault. Check your connection.')
+        }
+      }
+    } catch (err) {
+      console.error('Save error:', err)
+      alert('An error occurred while preparing the recipe.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -698,7 +704,7 @@ export default function App() {
                   <div className="profile-name">{user.displayName || 'Chef'}</div>
                   <div className="profile-email">{user.email}</div>
                 </div>
-                <button className="btn-logout" onClick={handleLogout}>Terminate Session</button>
+                <button className="btn-logout" onClick={handleLogout}>Log out</button>
               </div>
             )}
           </div>
