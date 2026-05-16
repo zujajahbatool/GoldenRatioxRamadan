@@ -333,7 +333,6 @@ export default function App() {
     } catch (err) {
       console.error('Save error:', err)
       alert('An error occurred while preparing the recipe.')
-    } finally {
       setSaving(false)
     }
   }
@@ -412,9 +411,13 @@ export default function App() {
   function openAdd() {
     setForm({ name: '', category: 'suhoor', servings: '', steps: '', mode: 'both' })
     setIngs([newIngRow()])
+    setSaving(false)
     setShowAdd(true)
   }
-  function closeAdd() { setShowAdd(false) }
+  function closeAdd() {
+    setShowAdd(false)
+    setSaving(false)
+  }
 
   function addIngRow() {
   setIngs(prev => prev.length >= MAX_INGS ? prev : [...prev, newIngRow()])}
