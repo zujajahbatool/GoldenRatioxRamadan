@@ -16,7 +16,8 @@ import {
   deleteDoc,
   doc,
   query,
-  orderBy
+  orderBy,
+  onSnapshot
 } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -38,5 +39,6 @@ export {
   signOut,
   onAuthStateChanged,
   updateProfile,
-  collection, addDoc, getDocs, deleteDoc, doc, query, orderBy
+  collection, addDoc, getDocs, deleteDoc, doc, query, orderBy,
+  onSnapshot
 }
