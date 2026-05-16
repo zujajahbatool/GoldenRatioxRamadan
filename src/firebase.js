@@ -6,7 +6,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  updateProfile
+  updateProfile,
+  setPersistence,
+  browserSessionPersistence
 } from 'firebase/auth'
 import {
   getFirestore,
@@ -16,8 +18,7 @@ import {
   deleteDoc,
   doc,
   query,
-  orderBy,
-  onSnapshot
+  orderBy
 } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -30,6 +31,7 @@ const firebaseConfig = {
 }
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
+setPersistence(auth, browserSessionPersistence)
 const db = getFirestore(app)
 
 export {
@@ -39,6 +41,5 @@ export {
   signOut,
   onAuthStateChanged,
   updateProfile,
-  collection, addDoc, getDocs, deleteDoc, doc, query, orderBy,
-  onSnapshot
+  collection, addDoc, getDocs, deleteDoc, doc, query, orderBy
 }

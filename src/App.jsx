@@ -4,8 +4,7 @@ import {
   auth, db,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signOut, onAuthStateChanged, updateProfile,
-  collection, addDoc, getDocs, deleteDoc, doc, query, orderBy,
-  onSnapshot
+  collection, addDoc, getDocs, deleteDoc, doc, query, orderBy
 } from './firebase.js'
 
 //CONSTANTS
@@ -153,28 +152,20 @@ export default function App() {
 
   //Voice input
   const [micActive, setMicActive] = useState(null)
-  const recRef = useRef(null)
-  const voiceBaseText = useRef('')  // text in field before mic started
-  const voiceField = useRef(null)   // which field mic is recording for
-
-  // Ref to hold the Firestore unsubscribe function for recipe listener
-  const recipeUnsubRef = useRef(null)
+  const recRef = useRef(null)  
 
   //AUTH LISTENER
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      // Clean up any previous recipe listener
-      if (recipeUnsubRef.current) {
-        recipeUnsubRef.current()
-        recipeUnsubRef.current = null
-      }
-
+    const unsub = onAuthStateChanged(auth, async (u) => {
       if (u) {
         setUser(u)
         setIsGuest(false)
         setShowAuth(false)
-        // Use real-time listener instead of one-shot getDocs
-        subscribeRecipes(u.uid)
+        try {
+          await loadRecipes(u.uid, false)
+        } catch (e) {
+          console.error('Failed to load recipes on auth:', e)
+        }
       }
       else {
         setUser(null)
@@ -185,13 +176,7 @@ export default function App() {
         setLoading(false)
       }
     })
-    return () => {
-      unsub()
-      if (recipeUnsubRef.current) {
-        recipeUnsubRef.current()
-        recipeUnsubRef.current = null
-      }
-    }
+    return unsub
   }, [])
   useEffect(() => {
     const controller = new AbortController()
@@ -274,21 +259,6 @@ export default function App() {
   }, [maghrib, fajr, timerType])
 
   //RECIPE CRUD
-  function subscribeRecipes(uid) {
-    if (!uid) { setRecipes(SAMPLE_RECIPES); return }
-    setLoading(true)
-    const q = query(collection(db, 'users', uid, 'recipes'), orderBy('createdAt', 'desc'))
-    const unsubSnap = onSnapshot(q, (snap) => {
-      setRecipes(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-      setLoading(false)
-    }, (e) => {
-      console.error('Recipe listener error:', e)
-      setLoading(false)
-    })
-    recipeUnsubRef.current = unsubSnap
-  }
-
-  // Kept for guest mode
   async function loadRecipes(uid, guest) {
     if (guest || !uid) { setRecipes(SAMPLE_RECIPES); return }
     setLoading(true)
@@ -341,19 +311,24 @@ export default function App() {
       setSaving(false)
       closeAdd()
     } else {
-      // For logged-in users, write to Firestore and let onSnapshot update the UI
+      // Optimistically add to UI first for instant feedback
+      setRecipes(prev => [recipe, ...prev])
+      setSaving(false)
+      closeAdd()
+      
       try {
-        await addDoc(
+        const ref = await addDoc(
           collection(db, 'users', user.uid, 'recipes'),
           { ...recipe, createdAt: timestamp }
         )
-        // onSnapshot listener will automatically update the recipes list
+        // Update the temporary ID to the real Firebase document ID silently
+        setRecipes(prev => prev.map(r => r.id === localId ? { ...r, id: ref.id } : r))
       } catch (e) {
         console.error('Failed to save recipe:', e)
-        alert('Could not save recipe to your vault. Check your connection and try again.')
+        // Rollback the optimistic update on network failure
+        setRecipes(prev => prev.filter(r => r.id !== localId))
+        alert('Could not sync recipe to the vault. Check your connection.')
       }
-      setSaving(false)
-      closeAdd()
     }
   }
 
@@ -486,34 +461,17 @@ export default function App() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { alert('Voice input needs Chrome or Edge.'); return }
     const rec = new SR()
-    rec.lang            = 'en-US'
-    rec.continuous      = field === 'steps'
-    rec.interimResults  = false   // only fire for final, committed results
+    rec.lang        = 'en-US'
+    rec.continuous  = field === 'steps'
     rec.maxAlternatives = 1
     recRef.current  = rec
-    voiceField.current = field
-    // Snapshot whatever text is already in the field before we start recording
-    setForm(prev => {
-      voiceBaseText.current = prev[field] || ''
-      return prev
-    })
     setMicActive(field)
-
     rec.onresult = (e) => {
-      // Build transcript from only the final results accumulated so far
-      let finalTranscript = ''
-      for (let i = 0; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          finalTranscript += e.results[i][0].transcript
-        }
-      }
-      finalTranscript = finalTranscript.trim()
-      if (finalTranscript) {
-        const base = voiceBaseText.current
-        const combined = base ? base + ' ' + finalTranscript : finalTranscript
+      const t = Array.from(e.results).map(r => r[0].transcript).join(' ')
+      if (t.trim()) {
         setForm(prev => ({
-          ...prev,
-          [field]: sanitize(combined, MAX_STEPS)
+         ...prev,
+         [field]: (prev[field] ? prev[field] + ' ' : '') + sanitize(t, MAX_STEPS)
         }))
       }
     }
@@ -740,7 +698,7 @@ export default function App() {
                   <div className="profile-name">{user.displayName || 'Chef'}</div>
                   <div className="profile-email">{user.email}</div>
                 </div>
-                <button className="btn-logout" onClick={handleLogout}>Logout</button>
+                <button className="btn-logout" onClick={handleLogout}>Terminate Session</button>
               </div>
             )}
           </div>
