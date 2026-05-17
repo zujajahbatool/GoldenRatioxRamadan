@@ -439,6 +439,10 @@ header, main { position: relative; z-index: 1; }
   font-weight: 600;
   color:       var(--gold);
   line-height: 1.3;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  flex: 1;
+  padding-right: 0.5rem;
 }
 
 .recipe-card-badge {
