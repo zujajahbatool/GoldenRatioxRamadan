@@ -56,11 +56,11 @@ const SAMPLE_RECIPES = [
 ]
 
 //SECURITY CONSTANTS
-const MAX_NAME = 120
-const MAX_ITEM = 80
-const MAX_UNIT = 20
+const MAX_NAME  = 120
+const MAX_ITEM  = 80
+const MAX_UNIT  = 20
 const MAX_STEPS = 5000
-const MAX_INGS = 30
+const MAX_INGS  = 30
 
 function sanitize(val, max) {
   return String(val ?? '').trim().slice(0, max)
@@ -134,16 +134,16 @@ export default function App() {
   const [scaleMap, setScaleMap] = useState({})
 
   //Iftar & Suhoor countdown
-  const [city, setCity] = useState('Faisalabad')
-  const [country, setCountry] = useState('PK')
-  const [maghrib, setMaghrib] = useState(null)
-  const [fajr, setFajr] = useState(null)
-  const [timerType, setTimerType] = useState('iftar')
-  const [countdown, setCountdown] = useState('Loading…')
+  const [city, setCity]               = useState('Faisalabad')
+  const [country, setCountry]         = useState('PK')
+  const [maghrib, setMaghrib]         = useState(null)
+  const [fajr, setFajr]               = useState(null)
+  const [timerType, setTimerType]     = useState('iftar')
+  const [countdown, setCountdown]     = useState('Loading…')
   const [timerPassed, setTimerPassed] = useState(false)
-  const [refreshIdx, setRefreshIdx] = useState(0)
+  const [refreshIdx, setRefreshIdx]   = useState(0)
   const [editingCity, setEditingCity] = useState(false)
-  const [cityDraft, setCityDraft] = useState('')
+  const [cityDraft, setCityDraft]     = useState('')
 
   //TTS
   const [speaking, setSpeaking] = useState(null)
@@ -151,18 +151,21 @@ export default function App() {
   //Voice input
   const [micActive, setMicActive] = useState(null)
   const recRef = useRef(null)
+  // Tracks how many SpeechRecognitionResult entries we have already consumed
+  // so we never re-append a transcript across multiple onresult events.
+  const voiceResultIdx = useRef(0)
 
   //Offline indicator
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
   //Online/offline detection
   useEffect(() => {
-    const goOnline = () => setIsOnline(true)
+    const goOnline  = () => setIsOnline(true)
     const goOffline = () => setIsOnline(false)
-    window.addEventListener('online', goOnline)
+    window.addEventListener('online',  goOnline)
     window.addEventListener('offline', goOffline)
     return () => {
-      window.removeEventListener('online', goOnline)
+      window.removeEventListener('online',  goOnline)
       window.removeEventListener('offline', goOffline)
     }
   }, [])
@@ -222,7 +225,7 @@ export default function App() {
   // Stop mic when add modal closes
   useEffect(() => {
     if (!showAdd && recRef.current) {
-      try { recRef.current.stop() } catch (_) { }
+      try { recRef.current.stop() } catch(_) {}
       recRef.current = null
       setMicActive(null)
     }
@@ -302,7 +305,7 @@ export default function App() {
       const allowedCats = ['suhoor', 'iftar', 'dessert']
       const allowedModes = ['both', 'read', 'listen']
       const category = allowedCats.includes(form.category) ? form.category : 'suhoor'
-      const mode = allowedModes.includes(form.mode) ? form.mode : 'both'
+      const mode     = allowedModes.includes(form.mode)     ? form.mode     : 'both'
 
       const timestamp = Date.now()
       const localId = `${timestamp}-${Math.random().toString(36).slice(2)}`
@@ -470,32 +473,41 @@ export default function App() {
     }
   }
 
-  // FIX: Voice input — only consume NEW FINAL results starting at e.resultIndex.
-  // Previously used Array.from(e.results) which re-read all results (including
-  // every interim partial) on every event, causing "Chick Chicken Chicken las…" stacking.
+  // FIX: Voice input deduplication.
+  // Root cause: every onresult event fires with the FULL e.results list from the
+  // beginning of the session, and e.resultIndex can reset to 0 in Chrome mid-session.
+  // Fix: maintain our own voiceResultIdx ref — we only process entries at indices
+  // >= voiceResultIdx.current and advance the pointer after each consumed entry.
+  // interimResults=false means the browser only fires for final phrases, but we
+  // still guard with isFinal so nothing slips through on any browser.
   function startVoice(field) {
     if (micActive) {
-      if (recRef.current) { try { recRef.current.stop() } catch (_) { } recRef.current = null }
+      if (recRef.current) { try { recRef.current.stop() } catch(_) {} recRef.current = null }
       setMicActive(null)
       return
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { alert('Voice input needs Chrome or Edge.'); return }
+
     const rec = new SR()
-    rec.lang = 'en-US'
-    rec.continuous = field === 'steps'
-    rec.interimResults = false
+    rec.lang            = 'en-US'
+    rec.continuous      = field === 'steps'
+    rec.interimResults  = false
     rec.maxAlternatives = 1
+
+    // Reset the consumed-results pointer for this new session
+    voiceResultIdx.current = 0
+
     recRef.current = rec
     setMicActive(field)
 
     rec.onresult = (e) => {
-      // Only read results that are newly arrived (from e.resultIndex onward)
-      // and only accept finalized results — never interim partials.
       let newText = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
+      // Walk from our own tracked pointer, not e.resultIndex (which can reset in Chrome)
+      for (let i = voiceResultIdx.current; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
           newText += e.results[i][0].transcript
+          voiceResultIdx.current = i + 1   // mark this result as consumed
         }
       }
       if (newText.trim()) {
@@ -506,14 +518,23 @@ export default function App() {
       }
     }
 
-    rec.onend = () => { recRef.current = null; setMicActive(null) }
+    rec.onend = () => {
+      recRef.current = null
+      voiceResultIdx.current = 0
+      setMicActive(null)
+    }
     rec.onerror = (e) => {
       console.error('Speech recognition error:', e.error)
       recRef.current = null
+      voiceResultIdx.current = 0
       setMicActive(null)
       if (e.error !== 'aborted') alert('Voice input failed. Please try again.')
     }
-    try { rec.start() } catch (e) { recRef.current = null; setMicActive(null) }
+    try { rec.start() } catch(e) {
+      recRef.current = null
+      voiceResultIdx.current = 0
+      setMicActive(null)
+    }
   }
 
   //DOWNLOAD AS TEXT

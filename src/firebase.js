@@ -13,7 +13,6 @@ import {
 import {
   initializeFirestore,
   persistentLocalCache,
-  persistentMultipleTabManager,
   collection,
   addDoc,
   getDocs,
@@ -39,10 +38,11 @@ setPersistence(auth, browserLocalPersistence)
 
 // Use IndexedDB-backed persistent cache so recipes survive browser restarts
 // and cold page loads don't require a live network round-trip to Firestore.
+// No explicit tabManager — defaults to single-tab mode which is the most
+// reliable; multi-tab manager can fail to acquire IndexedDB ownership on a
+// cold start and silently blocks all write operations including deleteDoc.
 const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager()
-  })
+  localCache: persistentLocalCache()
 })
 
 export {
