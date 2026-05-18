@@ -351,19 +351,26 @@ export default function App() {
 
   async function deleteRecipe(id) {
     if (!confirm('Remove this recipe from your vault?')) return
-    if (!isGuest && user) {
-      try {
-        await deleteDoc(doc(db, 'users', user.uid, 'recipes', id))
-      } catch (e) {
-        console.error('Failed to delete recipe:', e)
-        alert('Could not delete recipe. Try again.')
-        return
-      }
-    }
+
+    // Optimistic: remove from the UI immediately so the user sees an instant
+    // response. We keep a snapshot to roll back if the Firestore delete fails.
+    const snapshot = recipes
     if (speaking === id) { window.speechSynthesis?.cancel(); setSpeaking(null) }
     setRecipes(prev => prev.filter(r => r.id !== id))
     setScaleMap(prev => { const n = { ...prev }; delete n[id]; return n })
     if (readId === id) setReadId(null)
+
+    // Sync to Firestore in the background (guest recipes are local-only)
+    if (!isGuest && user) {
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'recipes', id))
+      } catch (e) {
+        console.error('Failed to delete recipe from Firestore:', e)
+        // Rollback the optimistic removal so the user doesn't lose the recipe
+        setRecipes(snapshot)
+        alert('Could not delete recipe. Check your connection and try again.')
+      }
+    }
   }
 
   //AUTH ACTIONS
