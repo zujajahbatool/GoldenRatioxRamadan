@@ -11,7 +11,9 @@ import {
   browserLocalPersistence
 } from 'firebase/auth'
 import {
-  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection,
   addDoc,
   getDocs,
@@ -29,10 +31,19 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 }
+
 const app = initializeApp(firebaseConfig)
+
 const auth = getAuth(app)
 setPersistence(auth, browserLocalPersistence)
-const db = getFirestore(app)
+
+// Use IndexedDB-backed persistent cache so recipes survive browser restarts
+// and cold page loads don't require a live network round-trip to Firestore.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+})
 
 export {
   auth, db,

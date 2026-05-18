@@ -56,11 +56,11 @@ const SAMPLE_RECIPES = [
 ]
 
 //SECURITY CONSTANTS
-const MAX_NAME  = 120
-const MAX_ITEM  = 80
-const MAX_UNIT  = 20
+const MAX_NAME = 120
+const MAX_ITEM = 80
+const MAX_UNIT = 20
 const MAX_STEPS = 5000
-const MAX_INGS  = 30
+const MAX_INGS = 30
 
 function sanitize(val, max) {
   return String(val ?? '').trim().slice(0, max)
@@ -70,7 +70,6 @@ function sanitizeNum(val) {
   return isNaN(n) || n < 0 ? 0 : Math.min(n, 99999)
 }
 function sanitizeCity(val) {
-  // Allow letters, spaces, hyphens only
   return String(val ?? '').replace(/[^a-zA-Z\s\-]/g, '').trim().slice(0, 60)
 }
 
@@ -132,27 +131,41 @@ export default function App() {
   const [saving, setSaving] = useState(false)
 
   //Serving-size scaler
-  // { recipeId: scaledServings }
   const [scaleMap, setScaleMap] = useState({})
 
   //Iftar & Suhoor countdown
-  const [city, setCity]               = useState('Faisalabad')
-  const [country, setCountry]         = useState('PK')
-  const [maghrib, setMaghrib]         = useState(null)  // "HH:MM"
-  const [fajr, setFajr]               = useState(null)  // "HH:MM"
-  const [timerType, setTimerType]     = useState('iftar') // 'iftar' or 'suhoor'
-  const [countdown, setCountdown]     = useState('Loading…')
+  const [city, setCity] = useState('Faisalabad')
+  const [country, setCountry] = useState('PK')
+  const [maghrib, setMaghrib] = useState(null)
+  const [fajr, setFajr] = useState(null)
+  const [timerType, setTimerType] = useState('iftar')
+  const [countdown, setCountdown] = useState('Loading…')
   const [timerPassed, setTimerPassed] = useState(false)
-  const [refreshIdx, setRefreshIdx]   = useState(0)
+  const [refreshIdx, setRefreshIdx] = useState(0)
   const [editingCity, setEditingCity] = useState(false)
-  const [cityDraft, setCityDraft]     = useState('')
+  const [cityDraft, setCityDraft] = useState('')
 
   //TTS
   const [speaking, setSpeaking] = useState(null)
 
   //Voice input
   const [micActive, setMicActive] = useState(null)
-  const recRef = useRef(null)  
+  const recRef = useRef(null)
+
+  //Offline indicator
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
+
+  //Online/offline detection
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
 
   //AUTH LISTENER
   useEffect(() => {
@@ -178,6 +191,7 @@ export default function App() {
     })
     return unsub
   }, [])
+
   useEffect(() => {
     const controller = new AbortController()
 
@@ -208,7 +222,7 @@ export default function App() {
   // Stop mic when add modal closes
   useEffect(() => {
     if (!showAdd && recRef.current) {
-      try { recRef.current.stop() } catch(_) {}
+      try { recRef.current.stop() } catch (_) { }
       recRef.current = null
       setMicActive(null)
     }
@@ -218,15 +232,14 @@ export default function App() {
   useEffect(() => {
     const timeStr = timerType === 'iftar' ? maghrib : fajr
     if (!timeStr) return
-    
+
     const tick = () => {
       const now = new Date()
       const [h, m] = timeStr.split(':').map(Number)
       const target = new Date()
       target.setHours(h, m, 0, 0)
-      
+
       const diffSinceTime = now - target
-      // If time passed today, show "Time!" for 1 hour, otherwise target tomorrow's time
       if (diffSinceTime >= 0) {
         if (diffSinceTime < 3600000) {
           setTimerPassed(true)
@@ -236,16 +249,15 @@ export default function App() {
           target.setDate(target.getDate() + 1)
         }
       }
-      
+
       const diff = target - now
       setTimerPassed(false)
       setCountdown(formatCountdown(diff))
     }
-    
+
     tick()
     const id = setInterval(tick, 1000)
 
-    //Refresh prayer time data at midnight
     const now = new Date()
     const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0) - now + 1000
     const midId = setTimeout(() => {
@@ -290,7 +302,7 @@ export default function App() {
       const allowedCats = ['suhoor', 'iftar', 'dessert']
       const allowedModes = ['both', 'read', 'listen']
       const category = allowedCats.includes(form.category) ? form.category : 'suhoor'
-      const mode     = allowedModes.includes(form.mode)     ? form.mode     : 'both'
+      const mode = allowedModes.includes(form.mode) ? form.mode : 'both'
 
       const timestamp = Date.now()
       const localId = `${timestamp}-${Math.random().toString(36).slice(2)}`
@@ -312,20 +324,17 @@ export default function App() {
         setRecipes(prev => [recipe, ...prev])
         closeAdd()
       } else {
-        // Optimistically add to UI first for instant feedback
         setRecipes(prev => [recipe, ...prev])
         closeAdd()
-        
+
         try {
           const ref = await addDoc(
             collection(db, 'users', user.uid, 'recipes'),
             { ...recipe, createdAt: timestamp }
           )
-          // Update the temporary ID to the real Firebase document ID silently
           setRecipes(prev => prev.map(r => r.id === localId ? { ...r, id: ref.id } : r))
         } catch (e) {
           console.error('Failed to save recipe:', e)
-          // Rollback the optimistic update on network failure
           setRecipes(prev => prev.filter(r => r.id !== localId))
           alert('Could not sync recipe to the vault. Check your connection.')
         }
@@ -345,7 +354,7 @@ export default function App() {
       } catch (e) {
         console.error('Failed to delete recipe:', e)
         alert('Could not delete recipe. Try again.')
-        return  // Abort: don't update local state on failure
+        return
       }
     }
     if (speaking === id) { window.speechSynthesis?.cancel(); setSpeaking(null) }
@@ -420,7 +429,8 @@ export default function App() {
   }
 
   function addIngRow() {
-  setIngs(prev => prev.length >= MAX_INGS ? prev : [...prev, newIngRow()])}
+    setIngs(prev => prev.length >= MAX_INGS ? prev : [...prev, newIngRow()])
+  }
   function removeIngRow(id) { setIngs(prev => prev.filter(i => i.id !== id)) }
   function updateIng(id, f, v) { setIngs(prev => prev.map(i => i.id === id ? { ...i, [f]: v } : i)) }
 
@@ -460,38 +470,50 @@ export default function App() {
     }
   }
 
+  // FIX: Voice input — only consume NEW FINAL results starting at e.resultIndex.
+  // Previously used Array.from(e.results) which re-read all results (including
+  // every interim partial) on every event, causing "Chick Chicken Chicken las…" stacking.
   function startVoice(field) {
     if (micActive) {
-      // Toggle off — stop existing session
-      if (recRef.current) { try { recRef.current.stop() } catch(_) {} recRef.current = null }
+      if (recRef.current) { try { recRef.current.stop() } catch (_) { } recRef.current = null }
       setMicActive(null)
       return
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { alert('Voice input needs Chrome or Edge.'); return }
     const rec = new SR()
-    rec.lang        = 'en-US'
-    rec.continuous  = field === 'steps'
+    rec.lang = 'en-US'
+    rec.continuous = field === 'steps'
+    rec.interimResults = false
     rec.maxAlternatives = 1
-    recRef.current  = rec
+    recRef.current = rec
     setMicActive(field)
+
     rec.onresult = (e) => {
-      const t = Array.from(e.results).map(r => r[0].transcript).join(' ')
-      if (t.trim()) {
+      // Only read results that are newly arrived (from e.resultIndex onward)
+      // and only accept finalized results — never interim partials.
+      let newText = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          newText += e.results[i][0].transcript
+        }
+      }
+      if (newText.trim()) {
         setForm(prev => ({
-         ...prev,
-         [field]: (prev[field] ? prev[field] + ' ' : '') + sanitize(t, MAX_STEPS)
+          ...prev,
+          [field]: (prev[field] ? prev[field] + ' ' : '') + sanitize(newText.trim(), MAX_STEPS)
         }))
       }
     }
-    rec.onend  = () => { recRef.current = null; setMicActive(null) }
+
+    rec.onend = () => { recRef.current = null; setMicActive(null) }
     rec.onerror = (e) => {
       console.error('Speech recognition error:', e.error)
       recRef.current = null
       setMicActive(null)
       if (e.error !== 'aborted') alert('Voice input failed. Please try again.')
     }
-    try { rec.start() } catch(e) { recRef.current = null; setMicActive(null) }
+    try { rec.start() } catch (e) { recRef.current = null; setMicActive(null) }
   }
 
   //DOWNLOAD AS TEXT
@@ -525,7 +547,6 @@ export default function App() {
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = `${recipe.name.replace(/\s+/g, '_')}_recipe.txt`
-    // FIX: Must append to DOM before clicking, especially in Firefox
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -611,6 +632,15 @@ export default function App() {
         </div>
       )}
 
+      {/*OFFLINE BANNER*/}
+      {!isOnline && (
+        <div className="offline-banner" role="status" aria-live="polite">
+          <span className="offline-icon">📡</span>
+          <span className="offline-text">You're offline — showing your cached recipes</span>
+          <span className="offline-dot" aria-hidden="true" />
+        </div>
+      )}
+
       {/*HEADER*/}
       <header className="header">
         <div className="header-left">
@@ -620,14 +650,13 @@ export default function App() {
         </div>
 
         <div className="header-right">
-          {/* Live iftar/suhoor countdown */}
           <div className="timer-left">
             <div className="timer-switcher">
-              <button 
+              <button
                 className={`timer-switch-btn ${timerType === 'suhoor' ? 'active' : ''}`}
                 onClick={() => setTimerType('suhoor')}
               >🌅 Suhoor</button>
-              <button 
+              <button
                 className={`timer-switch-btn ${timerType === 'iftar' ? 'active' : ''}`}
                 onClick={() => setTimerType('iftar')}
               >🌙 Iftar</button>
@@ -635,14 +664,14 @@ export default function App() {
             <div className="city-row">
               {editingCity ? (
                 <div className="city-edit-row">
-                 <input
-                   className="city-input"
-                   type="text"
-                   value={cityDraft}
-                   onChange={e => setCityDraft(e.target.value.replace(/[^a-zA-Z\s\-]/g, '').slice(0, 60))}
-                   placeholder="City"
-                   onKeyDown={e => {
-                     if (e.key === 'Enter') {
+                  <input
+                    className="city-input"
+                    type="text"
+                    value={cityDraft}
+                    onChange={e => setCityDraft(e.target.value.replace(/[^a-zA-Z\s\-]/g, '').slice(0, 60))}
+                    placeholder="City"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
                         const safe = cityDraft.trim()
                         if (safe) setCity(safe)
                         setEditingCity(false)
@@ -651,16 +680,16 @@ export default function App() {
                     }}
                     autoFocus
                   />
-                 <button
-                   type="button"
-                   className="city-apply-btn"
-                   onClick={() => {
-                     const safe = cityDraft.trim()
-                     if (safe) setCity(safe)
-                     setEditingCity(false)
-                   }}
-                 >✓</button>
-                 <button
+                  <button
+                    type="button"
+                    className="city-apply-btn"
+                    onClick={() => {
+                      const safe = cityDraft.trim()
+                      if (safe) setCity(safe)
+                      setEditingCity(false)
+                    }}
+                  >✓</button>
+                  <button
                     type="button"
                     className="city-cancel-btn"
                     onClick={() => setEditingCity(false)}
@@ -672,9 +701,9 @@ export default function App() {
                   className="city-pill"
                   onClick={() => { setCityDraft(city); setEditingCity(true) }}
                   title="Change city for prayer times"
-               >
-                 📍 {city}
-               </button>
+                >
+                  📍 {city}
+                </button>
               )}
             </div>
           </div>
@@ -692,7 +721,7 @@ export default function App() {
                   <div className="profile-name">Guest</div>
                   <div className="profile-email">Browsing as guest</div>
                 </div>
-                <button 
+                <button
                   type="button"
                   className="btn-login-from-guest"
                   onClick={() => { setIsGuest(false); setShowAuth(true) }}
@@ -835,8 +864,8 @@ export default function App() {
         >
           <div className="modal">
             <div className="modal-header">
-              <h2 className="modal-title">✦ Add New Recipe</h2>
-              <button className="modal-close" onClick={closeAdd}>✕</button>
+              <h2 className="modal-title" id="add-modal-title">✦ Add New Recipe</h2>
+              <button className="modal-close" onClick={closeAdd} aria-label="Close">✕</button>
             </div>
             <div className="modal-body">
 
@@ -948,10 +977,10 @@ export default function App() {
                 <label className="form-label">Cooking Steps</label>
                 <div className="input-mic-row">
                   <textarea
-                   id="recipe-steps"
-                   className="form-input form-textarea"
-                   value={form.steps}
-                   onChange={e => setForm(p => ({ ...p, steps: e.target.value.slice(0,                  MAX_STEPS) }))}
+                    id="recipe-steps"
+                    className="form-input form-textarea"
+                    value={form.steps}
+                    onChange={e => setForm(p => ({ ...p, steps: e.target.value.slice(0, MAX_STEPS) }))}
                     placeholder="Step 1: Wash rice…&#10;Step 2: Fry onions…"
                     maxLength={MAX_STEPS}
                   />
@@ -986,13 +1015,13 @@ export default function App() {
         >
           <div className="modal read-modal">
             <div className="modal-header">
-              <h2 className="modal-title">📖 {readRecipe.name}</h2>
-              <button 
+              <h2 className="modal-title" id="read-modal-title">📖 {readRecipe.name}</h2>
+              <button
                 type="button"
-                className="modal-close" 
+                className="modal-close"
                 onClick={() => setReadId(null)}
-                aria-label="Close recipe reader">✕
-              </button>
+                aria-label="Close recipe reader"
+              >✕</button>
             </div>
             <div className="modal-body">
 
